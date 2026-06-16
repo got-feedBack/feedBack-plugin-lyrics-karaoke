@@ -547,7 +547,7 @@ def setup(app: FastAPI, context: dict):
         """Per-song readiness check.
 
         Returns the flag set the setup screen and the in-player toggle
-        both consume. PSARC songs have ``is_sloppak=False`` and the rest
+        both consume. archive songs have ``is_sloppak=False`` and the rest
         of the flags are meaningless.
         """
         result = {
@@ -737,7 +737,7 @@ def setup(app: FastAPI, context: dict):
         resolved = _resolve_sloppak(filename)
         if resolved is None:
             return JSONResponse(
-                {"error": "Not a sloppak (PSARC songs are not supported)"},
+                {"error": "Not a sloppak song"},
                 400,
             )
         source_dir, manifest, dlc_path, is_zip = resolved

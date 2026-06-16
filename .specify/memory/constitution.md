@@ -10,7 +10,7 @@ absorbed its alignment endpoints.
 ### 1. Sloppak Only, Vocals Stem Required
 
 The two-stage pipeline (Whisper alignment + pYIN/CREPE pitch) requires
-an isolated vocals stem. PSARC songs are rejected up front with a
+an isolated vocals stem. archive songs are rejected up front with a
 clear error. Both `lyrics.json` and `vocal_pitch.json` are persisted
 *inside* the sloppak (manifest is patched, zip-form is re-zipped with
 a one-time `.bak`).
