@@ -1,0 +1,117 @@
+<div class="max-w-4xl mx-auto px-6 pt-24 pb-16">
+    <button onclick="showScreen('home')" class="text-gray-500 hover:text-white text-sm mb-6 flex items-center gap-1">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg> Back
+    </button>
+    <h2 class="text-3xl font-bold text-white mb-2">Lyrics Karaoke</h2>
+    <p class="text-gray-500 mb-8">Add a per-syllable pitch ribbon to a sloppak song so you can sing along. Aligns plain lyric text against the vocals stem with Whisper, then extracts pitch with pYIN.</p>
+
+    <!-- Alignment server status -->
+    <div id="lk-server-status" class="mb-6"></div>
+
+    <!-- Step 1: pick song -->
+    <div class="mb-6">
+        <label class="text-sm font-semibold text-gray-300 mb-2 block">1. Pick a song</label>
+        <div class="flex gap-3">
+            <input type="text" id="lk-search" placeholder="Search sloppak songs with stems..."
+                onkeydown="if(event.key==='Enter')lkSearchSongs()"
+                class="flex-1 bg-dark-700 border border-gray-800 rounded-xl px-4 py-2.5 text-sm text-gray-300 placeholder-gray-600 focus:border-accent/50 outline-none">
+            <button onclick="lkSearchSongs()" class="bg-dark-600 hover:bg-dark-500 px-5 py-2.5 rounded-xl text-sm text-gray-300 transition">Search</button>
+        </div>
+        <div id="lk-search-results" class="space-y-1 mt-2"></div>
+        <div id="lk-selected-song" class="hidden mt-3 bg-dark-700/50 border border-accent/30 rounded-xl p-3 flex items-center gap-3">
+            <span class="text-accent text-sm font-semibold" id="lk-selected-label"></span>
+            <button onclick="lkClearSong()" class="ml-auto text-gray-500 hover:text-red-400 text-xs transition">Clear</button>
+        </div>
+    </div>
+
+    <!-- Step 2: prerequisite checklist (only shown when a song is picked) -->
+    <div id="lk-checklist-section" class="mb-6 hidden">
+        <label class="text-sm font-semibold text-gray-300 mb-2 block">2. Karaoke prerequisites</label>
+        <ul id="lk-checklist" class="bg-dark-700/40 border border-gray-800 rounded-xl divide-y divide-gray-800/60 text-sm">
+            <li class="flex items-center gap-3 px-4 py-3" data-key="vocals">
+                <span class="lk-check w-5 text-gray-500">…</span>
+                <span class="flex-1 text-gray-300">Isolated vocals stem</span>
+                <span class="lk-detail text-xs text-gray-500"></span>
+            </li>
+            <li class="flex items-center gap-3 px-4 py-3" data-key="lyrics">
+                <span class="lk-check w-5 text-gray-500">…</span>
+                <span class="flex-1 text-gray-300">Synced lyrics</span>
+                <span class="lk-detail text-xs text-gray-500"></span>
+            </li>
+            <li class="flex items-center gap-3 px-4 py-3" data-key="pitch">
+                <span class="lk-check w-5 text-gray-500">…</span>
+                <span class="flex-1 text-gray-300">Per-syllable pitch</span>
+                <span class="lk-detail text-xs text-gray-500"></span>
+            </li>
+        </ul>
+    </div>
+
+    <!-- Step 3: lyrics input (shown when synced lyrics are missing) -->
+    <div id="lk-lyrics-section" class="mb-6 hidden">
+        <label class="text-sm font-semibold text-gray-300 mb-2 block">3. Plain lyric text</label>
+        <textarea id="lk-lyrics" rows="10" placeholder="Paste the song's lyrics, one line per line. Whisper will align them against the vocals stem."
+            class="w-full bg-dark-700 border border-gray-800 rounded-xl px-4 py-3 text-sm text-gray-300 placeholder-gray-600 focus:border-accent/50 outline-none resize-y font-mono"></textarea>
+        <div class="flex items-center gap-3 mt-2 flex-wrap">
+            <label class="cursor-pointer bg-dark-600 hover:bg-dark-500 px-4 py-2 rounded-lg text-xs text-gray-300 transition">
+                Upload .txt
+                <input type="file" accept=".txt,.lrc" id="lk-file-upload" class="hidden" onchange="lkFileUpload(this)">
+            </label>
+            <span class="text-xs text-gray-600" id="lk-lyrics-count">0 lines</span>
+            <span class="flex-1"></span>
+            <label class="text-xs text-gray-400">
+                Language hint:
+                <input type="text" id="lk-language" placeholder="auto" maxlength="5"
+                    class="ml-2 w-20 bg-dark-700 border border-gray-800 rounded-lg px-3 py-1.5 text-xs text-gray-300 placeholder-gray-600 focus:border-accent/50 outline-none">
+            </label>
+            <div class="flex items-center gap-3 text-xs text-gray-400">
+                <span>Granularity:</span>
+                <label class="flex items-center gap-1.5 cursor-pointer">
+                    <input type="radio" name="lk-granularity" value="syllable" checked class="accent-accent"> Syllable
+                </label>
+                <label class="flex items-center gap-1.5 cursor-pointer">
+                    <input type="radio" name="lk-granularity" value="word" class="accent-accent"> Word
+                </label>
+                <label class="flex items-center gap-1.5 cursor-pointer">
+                    <input type="radio" name="lk-granularity" value="line" class="accent-accent"> Line
+                </label>
+            </div>
+        </div>
+    </div>
+
+    <!-- Build button + progress -->
+    <div id="lk-build-section" class="mb-8 hidden">
+        <button onclick="lkBuild()" id="lk-build-btn"
+            class="bg-accent hover:bg-accent-light px-6 py-2.5 rounded-xl text-sm text-white font-semibold transition disabled:opacity-40 disabled:cursor-not-allowed"
+            disabled>
+            Build Karaoke
+        </button>
+        <div id="lk-progress" class="mt-4 hidden">
+            <div class="bg-dark-700 border border-gray-800 rounded-xl p-5">
+                <p class="text-sm text-gray-300 mb-3" id="lk-progress-label">Working…</p>
+                <div class="progress-bar"><div class="fill animate-pulse" style="width:100%"></div></div>
+                <p class="text-xs text-gray-500 mt-2" id="lk-progress-detail"></p>
+            </div>
+        </div>
+        <div id="lk-error" class="mt-4 hidden bg-red-900/20 border border-red-800/30 rounded-xl p-4 text-sm">
+            <p class="text-red-400 font-semibold mb-1">Build failed</p>
+            <p class="text-gray-400" id="lk-error-detail"></p>
+        </div>
+    </div>
+
+    <!-- Done state -->
+    <div id="lk-done" class="mb-8 hidden bg-green-900/20 border border-green-800/30 rounded-xl p-5 text-sm">
+        <p class="text-green-400 font-semibold mb-2">Karaoke ready ✓</p>
+        <p class="text-gray-300 mb-4" id="lk-done-detail"></p>
+        <div class="flex items-center gap-3 flex-wrap">
+            <button onclick="lkOpenInPlayer()" class="bg-accent hover:bg-accent-light px-5 py-2 rounded-lg text-sm text-white font-semibold transition">
+                Open in player
+            </button>
+            <button onclick="lkExport()" id="lk-export-btn" class="bg-dark-600 hover:bg-dark-500 px-5 py-2 rounded-lg text-sm text-gray-300 transition hidden">
+                Download .lrc
+            </button>
+            <button onclick="lkRedoPitch()" class="bg-dark-600 hover:bg-dark-500 px-5 py-2 rounded-lg text-sm text-gray-300 transition">
+                Re-extract pitch
+            </button>
+        </div>
+    </div>
+</div>

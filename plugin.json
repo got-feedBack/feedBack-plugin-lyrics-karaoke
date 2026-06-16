@@ -1,0 +1,10 @@
+{
+  "id": "lyrics_karaoke",
+  "name": "Lyrics Karaoke",
+  "version": "1.4.1",
+  "private": false,
+  "nav": { "label": "Lyrics Karaoke", "screen": "plugin-lyrics_karaoke" },
+  "screen": "screen.html",
+  "script": "screen.js",
+  "routes": "routes.py"
+}
