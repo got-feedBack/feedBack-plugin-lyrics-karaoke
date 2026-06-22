@@ -3,8 +3,14 @@
   "name": "Lyrics Karaoke",
   "version": "1.4.1",
   "private": false,
-  "nav": { "label": "Lyrics Karaoke", "screen": "plugin-lyrics_karaoke" },
+  "nav": {
+    "label": "Lyrics Karaoke",
+    "screen": "plugin-lyrics_karaoke"
+  },
   "screen": "screen.html",
   "script": "screen.js",
-  "routes": "routes.py"
+  "routes": "routes.py",
+  "category": "practice",
+  "description": "Karaoke-style synced lyrics during playback.",
+  "icon": "assets/thumb.svg"
 }
