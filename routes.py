@@ -34,7 +34,7 @@ import shutil
 import tempfile
 import threading
 import zipfile
-from pathlib import Path
+from pathlib import Path, PurePosixPath, PureWindowsPath
 
 import yaml
 from fastapi import FastAPI
@@ -98,6 +98,39 @@ def _write_manifest(source_dir: Path, manifest: dict) -> None:
     )
 
 
+def _safe_source_path(source_dir: Path, rel: str) -> Path | None:
+    """Resolve a manifest-declared relative path under ``source_dir``,
+    refusing anything that escapes it.
+
+    Manifest content (``stems[].file``, ``lyrics``, ``vocal_pitch``) is
+    untrusted — it comes from inside a `.sloppak`/`.feedpak` package that
+    may have been authored or shared by someone other than the library
+    owner. Without this check, ``source_dir / rel`` has two failure modes:
+    an absolute ``rel`` (e.g. ``/etc/passwd``) silently discards
+    ``source_dir`` entirely (a pathlib quirk), and a ``rel`` containing
+    ``..`` walks out of the pack directory. Either lets a crafted pack
+    make this plugin read an arbitrary local file and — for the vocals
+    stem — upload its bytes to the configured alignment/demucs server.
+    """
+    if not rel:
+        return None
+    safe = str(rel).replace("\\", "/")
+    if "\x00" in safe:
+        return None
+    if (PurePosixPath(safe).is_absolute()
+            or PureWindowsPath(safe).is_absolute()
+            or PureWindowsPath(safe).drive):
+        return None
+    try:
+        root = source_dir.resolve()
+        candidate = Path(os.path.normpath(root / safe))
+        if not candidate.is_relative_to(root):
+            return None
+    except (ValueError, OSError):
+        return None
+    return candidate
+
+
 def _vocals_rel_path(manifest: dict) -> str | None:
     for s in manifest.get("stems", []) or []:
         if not isinstance(s, dict):
@@ -119,8 +152,8 @@ def _lyrics_tokens(source_dir: Path, manifest: dict) -> list[dict]:
     rel = manifest.get("lyrics")
     if not rel:
         return []
-    p = source_dir / str(rel)
-    if not p.exists():
+    p = _safe_source_path(source_dir, str(rel))
+    if p is None or not p.exists():
         return []
     try:
         data = json.loads(p.read_text(encoding="utf-8"))
@@ -162,14 +195,21 @@ def _resolve_sloppak(filename: str):
     target is missing or isn't a sloppak.
     """
     import sloppak as sloppak_mod
+    from dlc_paths import _resolve_dlc_path
 
     if not filename:
         return None
     dlc = _get_dlc_dir() if _get_dlc_dir else None
     if not dlc:
         return None
-    dlc_path = (dlc / filename).resolve()
-    if not dlc_path.exists():
+    # `filename` arrives straight from the request (query param / JSON
+    # body). Use core's shared containment helper rather than a bare
+    # `dlc / filename` join — that would let a `../` (or similar) filename
+    # resolve outside DLC_DIR, and downstream this path is also used as
+    # the re-zip WRITE target (`_rezip_sloppak`), so an unguarded join
+    # here is an arbitrary-file-overwrite primitive, not just a read.
+    dlc_path = _resolve_dlc_path(dlc, filename)
+    if dlc_path is None or not dlc_path.exists():
         return None
     if not sloppak_mod.is_sloppak(dlc_path):
         return None
@@ -182,8 +222,8 @@ def _read_pitch_file(source_dir: Path, manifest: dict) -> dict | None:
     rel = manifest.get("vocal_pitch")
     if not rel:
         return None
-    p = source_dir / str(rel)
-    if not p.exists():
+    p = _safe_source_path(source_dir, str(rel))
+    if p is None or not p.exists():
         return None
     try:
         data = json.loads(p.read_text(encoding="utf-8"))
@@ -564,7 +604,8 @@ def setup(app: FastAPI, context: dict):
         source_dir, manifest, _dlc_path, _is_zip = resolved
         result["is_sloppak"] = True
         vocals_rel = _vocals_rel_path(manifest)
-        if vocals_rel and (source_dir / vocals_rel).exists():
+        vocals_path = _safe_source_path(source_dir, vocals_rel) if vocals_rel else None
+        if vocals_path and vocals_path.exists():
             result["has_vocals"] = True
         if _lyrics_tokens(source_dir, manifest):
             result["has_lyrics"] = True
@@ -660,8 +701,8 @@ def setup(app: FastAPI, context: dict):
                 {"error": "No vocals stem — split stems with Demucs first."},
                 400,
             )
-        vocals_path = source_dir / vocals_rel
-        if not vocals_path.exists():
+        vocals_path = _safe_source_path(source_dir, vocals_rel)
+        if vocals_path is None or not vocals_path.exists():
             return JSONResponse(
                 {"error": f"Vocals stem missing on disk: {vocals_rel}"},
                 400,
@@ -748,8 +789,8 @@ def setup(app: FastAPI, context: dict):
                 {"error": "No vocals stem — split stems with Demucs first."},
                 400,
             )
-        vocals_path = source_dir / vocals_rel
-        if not vocals_path.exists():
+        vocals_path = _safe_source_path(source_dir, vocals_rel)
+        if vocals_path is None or not vocals_path.exists():
             return JSONResponse(
                 {"error": f"Vocals stem missing on disk: {vocals_rel}"},
                 400,
